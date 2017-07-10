@@ -1,0 +1,1376 @@
+//Main.cpp
+
+#define _CRT_SECURE_NO_WARNINGS
+#define KEY_DOWN(VK_NONAME) ((GetAsyncKeyState(VK_NONAME) & 0x8000) ? 1:0)
+#include"buffs.h"
+using namespace std;
+void main()
+{
+	srand(time(NULL));
+	unsigned int pin = 1;
+	while (pin)
+	{
+		cout << "简单的聚会游戏联盟" << endl;
+		cout << "请选择模式：1.标准狼人 2.一夜狼人 0.退出" << endl;
+		pin = corrin<unsigned int>(0, 3);
+		if (pin == 1)
+		{
+			standardWerewolf game;
+			game.settings();
+			game.proceed();
+		}
+		else if (pin == 2)
+		{
+			OneNightWerewolf game;
+			game.settings();
+			game.proceed();
+			break;
+		}
+		else if (pin == 3)
+		{
+			AntiOrg game;
+			game.settings();
+			game.proceed();
+		}
+		system("cls");
+	}
+}
+
+//buffs.h
+
+#pragma once
+#define WEREWOLF 0 //由此开始至下一条注释以前（不含）为身份定义宏
+#define SEER 1
+#define WITCH 2
+#define HUNTER 3
+#define GUARD 4
+#define MANIAC 5
+#define CUPID 6
+#define VILLAGER 7
+#define DOPPLEGANGER -1
+#define MINION 2
+#define MASON 3
+#define ROBBER 4
+#define TROUBLEMAKER 5
+#define DRUNK 6
+#define INSOMNIAC 8
+#define TANNER 9
+#define SPY 0
+#define FIGHTERS 1
+#define MAN 10 //由此开始至下一条注释以前（不含）为阵营定义宏
+#define LOVERS 20
+#define THIRD 30
+#define UNKNOWN -10
+#define NEUTRAL 0 //由此开始至下一条注释以前（不含）为性别定义宏（专用于NameGen()函数）
+#define MALE 1
+#define FEMALE 2
+#define IDENTITY 0 //由此开始至下一条注释以前（不含）为判定方式定义宏（专用于SurvivorNumber()函数的重载形式1）
+#define TEAM 1
+#define NIGHT 0 //由此开始至下一条注释以前（不含）为游戏时间定义宏
+#define DAY 1
+#define SUCCEED 1//此为任务定义宏
+#define CONTINUE 0//由此开始至结束为抵抗组织游戏判定条件定义宏
+#define FIGHTERS_WIN 1
+#define SPIES_WIN 2
+#include<iostream>
+#include<ctime>
+#include<vector>
+#include<string>
+#include<fstream>
+#include<limits>
+#include<iterator>
+#include<algorithm>
+#include<strstream>
+#include<cstdlib>
+#include<iomanip>
+#include<conio.h>
+#include<Windows.h>
+using namespace std;
+class game
+{
+public:
+	game(int playernum) :playernum(playernum) {}
+	game() {}
+	virtual void settings() = 0;
+	virtual void proceed() = 0;
+protected:
+	unsigned int playernum;
+};
+void displayTime(unsigned int playtime)
+{
+	int time = floor(playtime / 1000);
+	int hour, minute, second;
+	hour = floor(time / 3600);
+	minute = floor((time % 3600) / 60);
+	second = time % 60;
+	cout << "游戏用时：";
+	if (hour)
+		cout << hour << "时";
+	if (minute)
+		cout << minute << "分";
+	cout << second << "秒";
+}
+template<typename T>
+T corrin(T LRange, T HRange, vector<T> BannedInputValues)//正确输入函数重载形式1
+{
+	T in;
+	bool ifBanned;
+	while (cin >> in)
+	{
+		ifBanned = 0;
+		for (int i = 0;i < BannedInputValues.size();i++)
+			if (in == BannedInputValues[i])
+				ifBanned = 1;
+		if (cin.fail())
+		{
+			cout << "输入错误！" << endl;
+			cin.clear();
+			cin.ignore((numeric_limits<streamsize>::max)(), '\n');
+		}
+		else if (in == 65535)
+			exit(1);
+		else if (in<LRange || in>HRange || ifBanned)
+		{
+			cout << "输入错误！" << endl;
+			cin.clear();
+			cin.ignore((numeric_limits<streamsize>::max)(), '\n');
+		}
+		else
+			break;
+	}
+	return in;
+}
+template<typename T>
+T corrin(T LRange, T HRange, T BannedInputValues)
+{
+	T in;
+	bool ifBanned;
+	while (cin >> in)
+	{
+		if (cin.fail())
+		{
+			cout << "输入错误！" << endl;
+			cin.clear();
+			cin.ignore((numeric_limits<streamsize>::max)(), '\n');
+		}
+		else if (in == 65535)
+			exit(1);
+		else if (in<LRange || in>HRange || in == BannedInputValues)
+		{
+			cout << "输入错误！" << endl;
+			cin.clear();
+			cin.ignore((numeric_limits<streamsize>::max)(), '\n');
+		}
+		else
+			break;
+	}
+	return in;
+}
+template<typename T>
+T corrin(T LRange, T HRange)//正确输入函数重载形式2
+{
+	T in;
+	while ((cin >> in).fail() || in<LRange || in>HRange)
+	{
+		if (in == 65535)
+			exit(1);
+		else
+		{
+			cout << "输入错误！" << endl;
+			cin.clear();
+			cin.ignore((numeric_limits<streamsize>::max)(), '\n');
+		}
+	}
+	return in;
+}
+template<typename T>
+T corrin()//正确输入函数重载形式3
+{
+	T in;
+	while ((cin >> in).fail())
+	{
+		cout << "输入错误！" << endl;
+		cin.clear();
+		cin.ignore((numeric_limits<streamsize>::max)(), '\n');
+	}
+	return in;
+}
+string NameGen(int namelength, int sex = NEUTRAL)//插件：自制简易名字生成器，能够生成两到三个字的中文名字，总占用：74行函数代码+2行宏定义
+{
+	int lastnamelength = namelength - 1;
+	string surname[] = { "赵","钱","孙","李","周","吴","郑","王","冯","陈","褚","卫","蒋","沈","韩","杨","朱","秦","尤","许","何","吕","施","张","孔","曹","严","华","金","魏","陶","姜","戚","谢","邹","水","昌","马","苗","凤","花","方","俞","任","袁","柳","鲍","史","唐","费","岑","薛","雷","贺","倪","汤","殷","罗","毕","郝","邬","安","常","乐","于","时","齐","康","伍","余","元","顾","孟","黄", "欧阳","夏侯","皇甫","上官" };
+	string malename[] = { "刚","强","仁","发","民","国","忠","德","志","智","辉","军","生","裕","健","炎","宏","毅","坚","石","超","鹏","亮","锦","春","磊","勇","正","东","南","斌","武","友","祖","兴","波","荣","峰","祥","振","海","凯","远","汉","桥","松","利" };
+	string femalename[] = { "花","芳","芬","燕","虹","菁","丽","娟","莘","苹","红","玉","妙","丹","芸","香","蕾","兰","慧","玲","静","茹","怡","紫" };
+	string neutralname[] = { "文","华","艺", "颂","宇","思","柏", "大","小", "家" };
+	string GeneratedName = surname[rand() % 78];
+	switch (sex)
+	{
+	case NEUTRAL:
+		if (lastnamelength == 2)
+		{
+			switch (rand() % 2)
+			{
+			case 0:
+				GeneratedName += neutralname[rand() % 10];;
+				GeneratedName += neutralname[rand() % 7];;
+				break;
+			case 1:
+				switch (rand() % 2)
+				{
+				case 0:
+					GeneratedName += malename[rand() % 47];
+					GeneratedName += femalename[rand() % 24];
+					break;
+				case 1:
+					GeneratedName += femalename[rand() % 24];
+					GeneratedName += malename[rand() % 47];;
+					break;
+				}
+				break;
+			}
+		}
+		else
+			GeneratedName += neutralname[rand() % 7];
+		break;
+	case MALE:
+		if (lastnamelength == 1)
+			GeneratedName += malename[rand() % 47];
+		else
+		{
+			switch (rand() % 2)
+			{
+			case 0:
+				GeneratedName += malename[rand() % 47];
+				break;
+			case 1:
+				GeneratedName += neutralname[rand() % 10];
+				break;
+			}
+			GeneratedName += malename[rand() % 47];
+		}
+		break;
+	case FEMALE:
+		if (lastnamelength == 1)
+			GeneratedName += femalename[rand() % 24];
+		else
+		{
+			switch (rand() % 2)
+			{
+			case 0:
+				GeneratedName += femalename[rand() % 24];
+				break;
+			case 1:
+				GeneratedName += neutralname[rand() % 10];
+				break;
+			}
+			GeneratedName += femalename[rand() % 24];
+		}
+		break;
+	}
+	return GeneratedName;
+}
+struct Player//代表一个玩家的结构体
+{
+	string name;//玩家名字
+	int number;//系统内玩家编号
+	int identity;//玩家身份
+	bool linkstate;//玩家是否处于被丘比特连接的状态
+	int livestate;//玩家的存活状态或者死亡方式
+	int team;//玩家所属阵营
+};
+string getLiveState(Player p)//获得存活状态或死亡方式
+{
+	string str[5] = { "刀杀","存活","毒死","枪杀","公决" };
+	return str[p.livestate];
+}
+string getLinkState(Player p)//获得是否被丘比特连接
+{
+	if (p.linkstate == 0)
+		return "未连接";
+	else
+		return "已连接";
+}
+string getIdentityName(int identity, int gamemode = 0)//获得身份名称
+{
+	vector<string> str;
+	switch (gamemode)
+	{
+	case 0:
+		str = { "狼人","预言家","女巫","猎人","守卫","白痴","丘比特","村民" };
+		break;
+	case 1:
+		str = { "政府间谍","自由战士" };
+		break;
+	}
+	return str[identity];
+}
+ostream& operator <<(ostream &output, Player p)//输出玩家信息
+{
+	output << "玩家" << p.number + 1 << " " << p.name << " 身份：" << getIdentityName(p.identity) << " 状态：" << getLiveState(p) << " " << getLinkState(p) << endl;
+	return output;
+}
+vector<int> getIdentity(int identitynum[8])//建立身份映射函数
+{
+	vector<int> identitycont;
+	for (int i = 0;i < 8;i++)
+		for (int j = 0;j < identitynum[i];j++)
+			identitycont.push_back(i);
+	return identitycont;
+}
+struct OneNightPlayer
+{
+	string name;
+	int number;
+	int identity;
+	int initialID;
+	int team;
+};
+struct AntiPlayer
+{
+	string name;
+	int number;
+	bool identity;
+};
+string getIdentityname(int identity)
+{
+	string identityname[11] = {"化身幽灵","狼人","预言家","爪牙","守夜人","强盗","捣蛋鬼","酒鬼","村民","失眠者","皮匠"};
+	return identityname[identity + 1];
+}
+ostream& operator <<(ostream &output, OneNightPlayer p)
+{
+	output << "玩家" << p.number + 1 << " " << p.name << " 初始身份：" << getIdentityname(p.initialID) << " 现在身份：" << getIdentityname(p.identity) << endl;
+	return output;
+}
+ostream& operator <<(ostream &output, vector<int> cont)
+{
+	for (int i = 0;i < cont.size();i++)
+		output << cont[i] << " ";
+	return output;
+}
+ostream& operator <<(ostream &output, vector<OneNightPlayer> cont)
+{
+	for (int i = 0;i < cont.size();i++)
+		output << cont[i];
+	return output;
+}
+ostream& operator <<(ostream &output, AntiPlayer p)
+{
+	output << "玩家" << p.number + 1 << " " << p.name << " 身份：" << getIdentityName(p.identity, 1) << endl;
+	return output;
+}
+ostream& operator <<(ostream &output, vector<AntiPlayer> cont)
+{
+	for (int i = 0;i < cont.size();i++)
+		cout << cont[i] << endl;
+	return output;
+}
+void endDisplay()
+{
+	cout << "         ***       ***        " << endl;
+	cout << "       **   **   **   **      " << endl;
+	cout << "      *      *****      *     " << endl;
+	cout << "      *                 *     " << endl;
+	cout << "      **               **     " << endl;
+	cout << "       **             **      " << endl;
+	cout << "        **           **       " << endl;
+	cout << "          *         *         " << endl;
+	cout << "            *     *           " << endl;
+	cout << "              ***             " << endl;
+	ifstream is("copyright1.txt");
+	system("cls");
+	char c;
+	while ((is >> c).good())
+		cout << c;
+	Sleep(10000);
+	is.close();
+}
+class standardWerewolf:public game//游戏类，封装了游戏内部所需的函数及变量
+{
+public:
+	standardWerewolf(int playernum = 8, bool victoryjudge = 0) :game(playernum), victoryjudge(victoryjudge)//构造函数
+	{
+		system("cls");
+	}
+	void settings() override//游戏前设置
+	{
+		cout << "爱神来啦！狼人杀V2.0.2" << endl;
+		cout << "请输入游戏人数(8-20)" << endl;
+		playernum = corrin<int>(8, 20);
+		cout << "请输入判定方式：0为屠边，1为屠城" << endl;
+		victoryjudge = corrin<bool>();
+		cout << "请输入公布身份方式：0为不公布，1为仅白天公布，2为全公布" << endl;
+		identitymode = corrin<unsigned int>(0, 2);
+		cout << "处理中..." << endl;
+		Sleep(1500);
+		system("cls");
+	reinput:
+		identitynum[7] = playernum;
+		for (int i = 0;i < 7;i++)
+		{
+			int num;
+			cout << "请输入" << getIdentityName(i) << "个数：" << endl;
+			switch (i)
+			{
+			case WEREWOLF:
+				cout << "(2-5)" << endl;
+				num = corrin<int>(2, 5);
+				identitynum[0] = num;
+				break;
+			default:
+				cout << "0-1" << endl;
+				num = corrin<int>(0, 1);
+				identitynum[i] = num;
+				break;
+			}
+			identitynum[7] -= identitynum[i];
+			system("cls");
+		}
+		if (identitynum[7] <= 0)
+		{
+			cout << "输入错误！" << endl;
+			goto reinput;
+		}
+		cout << "本局共包含以下身份：" << endl;
+		for (int i = 0;i < 8;i++)
+		{
+			if (identitynum[i] == 0)
+				continue;
+			else
+				cout << getIdentityName(i) << " " << identitynum[i] << endl;
+		}
+		identityc = getIdentity(identitynum);
+		cout << "现在进入身份分发环节" << endl;
+		Sleep(3000);
+		system("cls");
+		vector<int> usednumber;
+		for (int i = 0;i < playernum;i++)
+		{
+			Player player;
+			cout << "第" << i + 1 << "位玩家请输入姓名：" << endl << "提示：输入rand()有惊喜哦" << endl;
+			player.name = corrin<string>();
+			if (player.name == "rand()")
+				player.name = NameGen(rand() % 2 + 2, rand() % 3);
+			cout << "第" << i + 1 << "位玩家" << player.name;
+			player.number = i;
+			usednumber.push_back(-1);
+			int pin = 1;
+			int ident;
+			while (pin)
+			{
+				ident = rand() % playernum;
+				int pin1 = 1;
+				for (int i = 0;i < usednumber.size();i++)
+					if (ident == usednumber[i])
+						pin1 = 0;
+				pin = 1 - pin1;
+			}
+			usednumber.push_back(ident);
+			player.identity = identityc[ident];
+			cout << "的身份是：" << getIdentityName(identityc[ident]) << endl;
+			if (player.identity == WEREWOLF)
+				player.team = WEREWOLF;
+			else
+				player.team = MAN;
+			player.livestate = 1;
+			player.linkstate = 0;
+			cont.push_back(player);
+			_getch();
+			system("cls");
+		}
+		cout << "法官界面，请所有玩家离开，由法官开始操作界面" << endl;
+		fseek(stdin, 0, SEEK_END);
+		getchar();
+	}
+	void displayGameMode()//GodView()函数中显示对局基本信息的函数
+	{
+		cout << playernum << "人";
+		switch (victoryjudge)
+		{
+		case 0:
+			cout << "屠边局 ";
+			break;
+		default:
+			cout << "屠城局 ";
+			break;
+		}
+		for (int i = 0;i < 7;i++)
+			cout << identitynum[i] << getIdentityName(i) << " ";
+		switch (identitymode)
+		{
+		case 0:
+			cout << " 不公布身份" << endl;
+			break;
+		case 1:
+			cout << " 仅白天公布身份" << endl;
+			break;
+		case 2:
+			cout << " 全公布身份" << endl;
+			break;
+		}
+	}
+	void GodView()//上帝视角
+	{
+		system("cls");
+		displayGameMode();
+		for (int i = 0;i < cont.size();i++)
+			cout << cont[i] << endl;
+		fseek(stdin, 0, SEEK_END);
+		getchar();
+	}
+	int SurvivorNumber(int val, bool type = IDENTITY)//返回游戏当前存活人数，可按身份或阵营返回
+	{
+		int sum = 0;
+		if (type == 0)
+		{
+			for (int i = 0;i < cont.size();i++)
+				if (cont[i].identity == val&&cont[i].livestate == 1)
+					sum++;
+		}
+		else
+		{
+			for (int i = 0;i < cont.size();i++)
+				if (cont[i].team == val&&cont[i].livestate == 1)
+					sum++;
+		}
+		return sum;
+	}
+	int SurvivorNumber()//返回当前游戏存活总人数
+	{
+		int sum = 0;
+		for (int i = 0;i < cont.size();i++)
+			if (cont[i].livestate == 1)
+				sum++;
+		return sum;
+	}
+	int victoryJudge()//胜利条件判定，返回代表何方胜利或是游戏继续的代码
+	{
+		unsigned int linkednum = 0;
+		for (int i = 0;i < playernum;i++)
+			if (cont[i].linkstate == 1 && cont[i].livestate == 1)
+				linkednum++;
+		if (linkednum >= SurvivorNumber() - linkednum)
+			return 3;
+		else if (((SurvivorNumber(WEREWOLF) >(SurvivorNumber() - SurvivorNumber(WEREWOLF))) && victoryjudge == 1) || (((SurvivorNumber(VILLAGER) == 0) || (SurvivorNumber() - SurvivorNumber(WEREWOLF) - SurvivorNumber(VILLAGER) == 0)) && victoryjudge == 0))
+			return 2;
+		else if (SurvivorNumber(WEREWOLF) == 0)
+			return 1;
+		else
+			return 0;
+	}
+	void death(int num, int time, int livestate)//对一名玩家进行死亡操作
+	{
+		if (cont[num - 1].linkstate != 1)
+		{
+			if (livestate == 4)
+				cout << num << "号玩家被投出局";
+			else if (livestate == 3)
+				cout << num << "号玩家被枪杀";
+			else
+				cout << num << "号玩家死亡";
+			if ((time == NIGHT&&identitymode != 2) || (time == DAY&&identitymode == 0))
+				cout << endl;
+			else
+				cout << "，身份为：" << getIdentityName(cont[num - 1].identity) << endl;
+			if (cont[num - 1].identity == HUNTER)
+				HunterProcess(num, time);
+			pushDead(num);
+			cont[num - 1].livestate = livestate;
+		}
+		else
+		{
+			for (int i = 1;i <= playernum;i++)
+			{
+				if (cont[i - 1].linkstate == 1)
+				{
+					if (i != num)
+						cout << "由于恋爱关系，";
+					if (livestate == 4)
+						cout << i << "号玩家被投出局";
+					else if (livestate == 3)
+						cout << i << "号玩家被枪杀";
+					else
+						cout << i << "号玩家死亡";
+					if ((time == NIGHT&&identitymode != 2) || (time == DAY&&identitymode == 0))
+						cout << endl;
+					else
+						cout << "，身份为：" << getIdentityName(cont[i - 1].identity) << endl;
+					pushDead(i);
+					cont[i - 1].livestate = livestate;
+				}
+			}
+			if (cont[num - 1].identity == HUNTER&&livestate != 2)
+				HunterProcess(num, time);
+		}
+	}
+	void HunterProcess(int num, bool time)//猎人发动技能操作函数
+	{
+		if (num && (cont[num - 1].identity == HUNTER))
+		{
+			int shoot;
+			cout << num << "号玩家身份为猎人，请选择你想要枪杀的对象：" << endl;
+			shoot = corrin<int>(0, playernum, deadsnum);
+			if (shoot)
+				death(shoot, time, 3);
+			else
+				cout << "猎人没有带走人" << endl;
+		}
+	}
+	void resultOutput(bool time, int kill, int poison, int vote = 0)//显示当夜或当天结果
+	{
+		if (time == NIGHT)
+		{
+			cout << "昨夜";
+			if (poison)
+				death(poison, time, 2);
+			if (kill)
+				death(kill, time, 0);
+			if (!poison && !kill)
+				cout << "平安夜" << endl;
+		}
+		else
+		{
+			if (vote != 0 && cont[vote - 1].identity != MANIAC)
+				death(vote, time, 4);
+			else if (vote != 0)
+				cout << vote << "号玩家的身份为白痴，公投失败" << endl;
+		}
+	}
+	void pushDead(int code)//将死亡玩家登记到死亡列表中
+	{
+		deadsnum.push_back(code);
+	}
+	void proceed() override//游戏进行
+	{
+		DWORD sttime, edtime;
+		sttime = GetTickCount();
+		int round = 0;
+		int winner = 5;
+		int cure = 1, usepoison = 1, poison = 1, guard = 0, kill = 0, vote = 0, ifsave = 0;
+		while (++round)
+		{
+			system("cls");
+			GodView();
+			ifsave = 0;
+			cout << "第" << round << "夜来了" << endl;
+			gametime = NIGHT;
+			for (int i = 0;i < playernum;i++)
+			{
+				if (cont[i].identity == CUPID&&round == 1)
+				{
+					int num1, num2;
+					cout << "丘比特：请选择您要连接的两位玩家。请同行输入并用空格分隔：" << endl;
+					num1 = corrin<int>(1, playernum);
+					num2 = corrin<int>(1, playernum);
+					cont[num1 - 1].linkstate = 1;
+					cont[num2 - 1].linkstate = 1;
+					if (cont[num1 - 1].team + cont[num2 - 1].team == 10)
+					{
+						cont[num1 - 1].team = LOVERS;
+						cont[num2 - 1].team = LOVERS;
+						cont[i].team = LOVERS;
+					}
+				}
+			}
+			for (int i = 0;i < playernum;i++)
+			{
+				if (cont[i].identity == GUARD)
+				{
+					cout << "守卫：请选择今晚的守护对象：" << endl;
+					guard = corrin<int>(0, playernum, guarded);
+				}
+			}
+			if (guarded.size())
+				guarded.pop_back();
+			guarded.push_back(guard);
+			for (int i = 1;i <= playernum;i++)
+			{
+				for (int j = 0;j < deadsnum.size();j++)
+					if (i == deadsnum[j])
+						guarded.push_back(i);
+			}
+			cout << "狼人：请选择今晚的击杀对象：" << endl;
+			kill = corrin<int>(1, playernum);
+			if (kill == guard)
+				kill = 0;
+			for (int i = 0;i < playernum;i++)
+			{
+				if (cont[i].identity == WITCH)
+				{
+					if (cure)
+						cout << "女巫：今夜死亡玩家有";
+					if (kill != 0 && kill != guard&&cont[i].livestate == 1 && cure == 1)
+					{
+						cout << kill << "要使用解药吗？" << endl;
+						ifsave = corrin<int>(0, 1);
+					}
+					else
+						cout << endl;
+					if (ifsave == 1)
+					{
+						kill = 0;
+						cure = 0;
+					}
+					if (usepoison&&ifsave != 1)
+						cout << "女巫：你有一瓶毒药要使用吗？" << endl;
+					if (usepoison == 1 && ifsave == 0)
+					{
+						poison = corrin<int>(0, playernum, deadsnum);
+						if (poison != 0)
+							usepoison = 0;
+					}
+					else
+						poison = 0;
+				}
+			}
+			for (int i = 0;i < playernum;i++)
+			{
+				if (cont[i].identity == HUNTER)
+				{
+					cout << "猎人：你今夜";
+					if (poison - 1 == i)
+						cout << "被女巫毒死，不能使用技能" << endl;
+					else
+						cout << "没有被女巫毒死，能使用技能" << endl;
+				}
+			}
+			for (int i = 0;i < playernum;i++)
+			{
+				if (cont[i].identity == SEER)
+				{
+					int seen;
+					cout << "预言家：请选择你今晚要调查的对象" << endl;
+					if (cont[i].livestate == 1)
+					{
+						seen = corrin<int>(1, playernum, deadsnum);
+						if (cont[seen - 1].team == WEREWOLF)
+							cout << "预言家：" << seen << "号玩家属于狼人阵营" << endl;
+						else if (cont[seen - 1].team == MAN)
+							cout << "预言家：" << seen << "号玩家属于村民阵营" << endl;
+						else
+							cout << "预言家：" << seen << "号玩家属于第三阵营" << endl;
+					}
+				}
+			}
+			resultOutput(NIGHT, kill, poison);
+			if (winner = victoryJudge())
+				break;
+			fseek(stdin, 0, SEEK_END);
+			getchar();
+			GodView();
+			cout << "白天来了，请大家投票选出狼人" << endl;
+			gametime = DAY;
+			vote = corrin<int>(0, playernum, deadsnum);
+			resultOutput(DAY, 0, 0, vote);
+			if (winner = victoryJudge())
+				break;
+			fseek(stdin, 0, SEEK_END);
+			getchar();
+		}
+		edtime = GetTickCount();
+		unsigned int playtime = edtime - sttime;
+		if (winner == 1)
+			cout << "村民胜利！" << endl;
+		else if (winner == 2)
+			cout << "狼人胜利！" << endl;
+		else
+			cout << "情侣胜利！" << endl;
+		displayTime(playtime);
+		fseek(stdin, 0, SEEK_END);
+		getchar();
+	}
+private:
+	bool victoryjudge;//胜负判定：屠边/屠城
+	vector<Player> cont;//玩家容器
+	int identitynum[8];//身份数目数组
+	vector<int> identityc;//身份映射表
+	vector<int> deadsnum;//死亡玩家序号列表
+	vector<int> guarded;//是否被守卫及上次守卫的列表
+	int identitymode;//游戏身份公布决定变量
+	bool gametime;//游戏时间（白天/黑夜）
+};
+class OneNightWerewolf:public game
+{
+public:
+	OneNightWerewolf(int playernum = 11) :game(playernum)
+	{
+		system("cls");
+		cout << "One Night Werewolf" << endl;
+	}
+	vector<int> identityDistribute(int playernum)
+	{
+	reinput:
+		vector<int> ret;
+		//cout << "Choose mode: 1.Manual Input 2.Use Default" << endl;
+		//int choice = corrin<int>(1, 2);
+		//if (choice == 1)
+		{
+			int num;
+			for (int i = -1;i < 10;i++)
+			{
+				if (i != 7)
+				{
+					cout << "Please input the number of:" << getIdentityname(i);
+					if (i == WEREWOLF)
+						num = corrin<int>(1, 2);
+					else if (i == MASON)
+						num = corrin<int>(0, 2, 1);
+					else
+						num = corrin<int>(0, 1);
+					for (int j = 0;j < num;j++)
+						ret.push_back(i);
+					system("cls");
+				}
+			}
+			int numofvillager = playernum + 3 - ret.size();
+			if (numofvillager < 1)
+			{
+				cout << "输入错误！" << endl;
+				fseek(stdin, 0, 2);
+				getchar();
+				goto reinput;
+			}
+			int k;
+			for (k = 0;k < ret.size();k++)
+				if (ret[k] == 8)
+					break;
+			vector<int>::iterator loc = ret.begin() + k;
+			ret.insert(loc, numofvillager, VILLAGER);
+			cout << ret;
+			return ret;
+		}
+		//else
+		//	return useDefault(playernum);
+	}
+	void settings() override//游戏前设置
+	{
+		cout << "请输入游戏人数(5-11)" << endl;
+		playernum = corrin<int>(5, 11);
+		cout << "处理中..." << endl;
+		Sleep(1500);
+		system("cls");
+		IdentityTable = identityDistribute(playernum);
+		cout << "现在进入身份分发环节" << endl;
+		Sleep(3000);
+		system("cls");
+		vector<int> usednumber;
+		for (int i = 0;i < playernum;i++)
+		{
+			OneNightPlayer player;
+			cout << "第" << i + 1 << "位玩家请输入姓名：" << endl << "提示：输入rand()有惊喜哦" << endl;
+			player.name = corrin<string>();
+			if (player.name == "rand()")
+				player.name = NameGen(rand() % 2 + 2, rand() % 3);
+			cout << "第" << i + 1 << "位玩家" << player.name;
+			player.number = i;
+			usednumber.push_back(-10);
+			int pin = 1;
+			int ident;
+			while (pin)
+			{
+				ident = rand() % (playernum + 3);
+				int pin1 = 1;
+				for (int i = 0;i < usednumber.size();i++)
+					if (ident == usednumber[i])
+						pin1 = 0;
+				pin = 1 - pin1;
+			}
+			usednumber.push_back(ident);
+			player.identity = IdentityTable[ident];
+			player.initialID = player.identity;
+			cout << "的身份是：" << getIdentityname(IdentityTable[ident]) << endl;
+			if (player.identity == WEREWOLF || player.identity == MINION)
+				player.team = WEREWOLF;
+			else if (player.identity == TANNER)
+				player.team = THIRD;
+			else if (player.identity == DOPPLEGANGER)
+				player.team = UNKNOWN;
+			else
+				player.team = MAN;
+			cont.push_back(player);
+			_getch();
+			system("cls");
+		}
+		for (int i = 0;i < 3;i++)
+		{
+			int ident;
+			int pin = 1;
+			while (pin)
+			{
+				ident = rand() % (playernum + 3);
+				int pin1 = 1;
+				for (int i = 0;i < usednumber.size();i++)
+					if (ident == usednumber[i])
+						pin1 = 0;
+				pin = 1 - pin1;
+			}
+			usednumber.push_back(ident);
+			LeftoutID[i] = IdentityTable[ident];
+		}
+		cout << "法官界面，请所有玩家离开，由法官开始操作界面" << endl;
+		fseek(stdin, 0, SEEK_END);
+		getchar();
+		cout << cont << endl;
+		displayUndercover();
+	}
+	void displayUndercover()
+	{
+		cout << "中间三张身份牌分别是：";
+		for (int i = 0;i < 3;i++)
+			cout << getIdentityname(LeftoutID[i]) << " ";
+		cout << endl;
+	}
+	void displayGameMode()
+	{
+		cout << playernum << "人 ";
+		int number = 0;
+		for (int i = 0;i < 10;i++)
+		{
+			for (int j = 0;j < playernum + 3;j++)
+				if (IdentityTable[j] == i - 1)
+					number++;
+			cout << number << getIdentityname(i - 1) << " ";
+			number = 0;
+		}
+	}
+	int getCode(int identity, int begin = 0)//not 0(werewolf)
+	{
+		for (int i = begin;i < playernum;i++)
+			if (cont[i].initialID == identity)
+				return i;
+		return -1;
+	}
+	void ResultOutput(int result)
+	{
+		if (cont[result - 1].identity == WEREWOLF)
+			cout << "村民胜利！" << endl;
+		else if (cont[result - 1].identity == TANNER)
+			cout << "皮匠胜利！" << endl;
+		else
+			cout << "狼人和爪牙胜利！" << endl;
+		cout << cont << endl;
+		fseek(stdin, 0, SEEK_END);
+		getchar();
+	}
+	void proceed() override
+	{
+		displayGameMode();
+		cout << endl << "Night comes..." << endl;
+		if (getCode(DOPPLEGANGER) + 1)
+		{
+			cout << "Doppleganger: Please choose a player to copy..." << endl;
+			int choice = corrin<int>(1, playernum + 1);
+			cont[getCode(DOPPLEGANGER)].identity = cont[choice - 1].identity;
+			//cont[getCode(DOPPLEGANGER)].initialID = cont[choice - 1].identity;
+			cont[getCode(DOPPLEGANGER)].team = cont[choice - 1].team;
+			Sleep(5000);
+		}
+		else
+			Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		//PlaySound(TEXT("F:\\Users\\zishuo\\Desktop\\ding.wav"), NULL, SND_FILENAME);
+		int werewolfpin = 0;
+		for (int i = 0;i < playernum;i++)
+			if (cont[i].identity == WEREWOLF)
+			{
+				werewolfpin += 1;
+				cout << i + 1 << " ";
+			}
+		if (werewolfpin)
+		{
+			cout << " is/are werewolf" << endl;
+			if (werewolfpin == 1)
+			{
+				cout << "You can see a card in the middle. Please choose the number:" << endl;
+				int choice = corrin<int>(1, 3);
+				cout << "The card you see is a " << getIdentityname(LeftoutID[choice - 1]);
+			}
+			Sleep(5000);
+		}
+		else
+			Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		if (getCode(MINION) + 1)
+		{
+			if (werewolfpin)
+			{
+				cout << "Minion:Player number ";
+				for (int i = 0;i < playernum;i++)
+					if (cont[i].identity == WEREWOLF)
+					{
+						werewolfpin += 1;
+						cout << i + 1 << " ";
+					}
+				cout << "is/are werewolf." << endl;
+			}
+			else
+				cout << "Minion:There are no werewolves in this round." << endl;
+		}
+		Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		if (getCode(SEER) + 1)
+		{
+			cout << "Seer: Please choose: 1.See one of the player's identity 2.See two of the identities in the middle" << endl;
+			int choice = corrin<int>(1, 2);
+			int choice1, choice2, choice9;
+			switch (choice)
+			{
+			case 1:
+				cout << "Seer:Please input the number of the player you want to see:" << endl;
+				choice9 = corrin<int>(1, playernum);
+				cout << choice9 << "号玩家的身份是" << getIdentityname(cont[choice9 - 1].identity);
+				break;
+			case 2:
+				cout << "Seer:Please input the numbers of the cards you want to see:" << endl;
+				choice1 = corrin<int>(1, 3);
+				vector<int> choiceban;
+				choiceban.push_back(choice1);
+				choice2 = corrin<int>(1, 3, choiceban);
+				cout << "您想看到的身份是：" << getIdentityname(LeftoutID[choice1 - 1]) << " " << getIdentityname(LeftoutID[choice1 - 1]) << endl;
+				break;
+			}
+			Sleep(5000);
+		}
+		else
+			Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		if (getCode(ROBBER) + 1)
+		{
+			cout << "Robber: Please choose a player to change identity with..." << endl;
+			int choice = corrin<int>(1, playernum + 1);
+			cout << "选择玩家的身份：" << getIdentityname(cont[choice - 1].identity) << endl;
+			cont[getCode(ROBBER)].identity = cont[choice - 1].identity;
+			cont[getCode(ROBBER)].team = cont[choice - 1].team;
+			cont[choice - 1].identity = ROBBER;
+			cont[choice - 1].team = MAN;
+			Sleep(5000);
+		}
+		else
+			Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		if (getCode(TROUBLEMAKER) + 1)
+		{
+			cout << "Troublemaker: Please choose two players (not including yourself) to change identity..." << endl;
+			vector<int> banned;
+			banned.push_back(getCode(TROUBLEMAKER) + 1);
+			int choice1 = corrin<int>(1, playernum + 1, banned);
+			banned.push_back(choice1);
+			int choice2 = corrin<int>(1, playernum + 1, banned);
+			OneNightPlayer mid;
+			mid.identity = cont[choice1 - 1].identity;
+			mid.team = cont[choice1 - 1].team;
+			mid.initialID = UNKNOWN;
+			mid.name = "";
+			mid.number = UNKNOWN;
+			cont[choice1 - 1].identity = cont[choice2 - 1].identity;
+			cont[choice1 - 1].team = cont[choice2 - 1].team;
+			cont[choice2 - 1].identity = mid.identity;
+			cont[choice2 - 1].team = mid.team;
+			Sleep(5000);
+		}
+		else
+			Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		if (getCode(DRUNK) + 1)
+		{
+			cout << "Drunk: Please choose one of the cards in the middle to change your identity with..." << endl;
+			int choice = corrin<int>(1, 3);
+			cont[getCode(DRUNK)].identity = LeftoutID[choice - 1];
+			if (LeftoutID[choice - 1] == WEREWOLF || LeftoutID[choice - 1] == MINION)
+				cont[getCode(DRUNK)].team = WEREWOLF;
+			else if (LeftoutID[choice - 1] == TANNER)
+				cont[getCode(DRUNK)].team = THIRD;
+			else if (LeftoutID[choice - 1] = DOPPLEGANGER)
+				cont[getCode(DRUNK)].team = UNKNOWN;
+			else
+				cont[getCode(DRUNK)].team = MAN;
+			LeftoutID[choice - 1] = DRUNK;
+			Sleep(5000);
+		}
+		else
+			Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		if (getCode(INSOMNIAC) + 1)
+			cout << "Insomniac:Your identity is:" << getIdentityname(cont[getCode(INSOMNIAC)].identity) << endl;
+		Sleep(rand() % 15000 + 10000);
+		system("cls");
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		cout << cont << endl;
+		displayUndercover();
+		cout << "Daytime comes! Please choose the werewolves..." << endl;
+		cout << "Please input discussion length (min):" << endl;
+		int timel = corrin<int>();
+		cout << "Discussion Starts!" << endl;
+		DWORD start, end;
+		start = GetTickCount();
+		while (1)
+		{
+			end = GetTickCount();
+			if (KEY_DOWN('q') || end - start > 60000 * timel)
+				break;
+		}
+		system("F:\\Users\\zishuo\\Desktop\\ding.wav");
+		cout << "Please input the result:" << endl;
+		int result = corrin<int>(1, playernum);
+		ResultOutput(result);
+	}
+private:
+	vector<OneNightPlayer> cont;
+	vector<int> IdentityTable;
+	int LeftoutID[3];
+};
+vector<int> getMissionExec(unsigned int playernum)
+{
+	if (playernum < 8)
+	{
+		vector<int> ret;
+		ret.push_back(2);
+		ret.push_back(3);
+		switch (playernum)
+		{
+		case 5:
+			ret.push_back(2);
+			ret.push_back(3);
+			ret.push_back(3);
+			break;
+		case 6:
+			ret.push_back(4);
+			ret.push_back(3);
+			ret.push_back(4);
+			break;
+		case 7:
+			ret.push_back(3);
+			ret.push_back(4);
+			ret.push_back(4);
+			break;
+		}
+		return ret;
+	}
+	else
+	{
+		vector<int> ret = { 3,4,3,5,4 };
+		return ret;
+	}
+}
+unsigned int getSpyNum(unsigned int playernum)
+{
+	switch (playernum)
+	{
+	case 5:
+	case 6:
+		return 2;
+	case 7:
+	case 8:
+	case 9:
+		return 3;
+	case 10:
+		return 4;
+	}
+}
+class AntiOrg:public game
+{
+public:
+	AntiOrg(int playernum) :game(playernum) 
+	{
+		compnum = 0;
+		failnum = 0;
+		MissionExecNumber = getMissionExec(playernum);
+		round = 0;
+	}
+	AntiOrg() {}
+	vector<bool> identityDistribute()
+	{
+		vector<bool> ret;
+		for (int i = 0;i < playernum;i++)
+			ret.push_back(FIGHTERS);
+		vector<unsigned int> usedcont;
+		usedcont.push_back(1000);
+		int spyn;
+		for (int i = 0;i < getSpyNum(playernum);i++)
+		{
+			int overridepin = 1;
+			while(overridepin)
+			{ 
+				overridepin = 0;
+				spyn = rand() % playernum;
+				for (int j = 0;j < usedcont.size();j++)
+				{
+					if (spyn == usedcont[j])
+					{
+						overridepin = 1;
+						break;
+					}
+				}
+			}
+			ret[spyn] = SPY;
+			usedcont.push_back(spyn);
+		}
+		return ret;
+	}
+	bool missionExec()
+	{
+		vector<bool> choice;
+		int choose;
+		for (int i = 0;i < ChosenforMission.size();i++)
+		{
+			system("cls");
+			cout << ChosenforMission[i].number + 1 << "号玩家请开始执行任务：" << endl;
+			fseek(stdin, 0, SEEK_END);
+			getchar();
+			if (ChosenforMission[i].identity == SPY)
+			{
+				cout << "您为红方，您可以选择使任务成功（1）或失败（0）:" ;
+				choose = corrin<bool>();
+				choice.push_back(choose);
+			}
+			else
+			{
+				cout << "您为蓝方，您必须选择使任务成功。按任意键以继续。" << endl;
+				_getch();
+				choice.push_back(SUCCEED);
+			}
+		}
+		int failnum = 0;
+		for (int i = 0;i < choice.size();i++)
+			if (choice[i] != SUCCEED)
+				failnum++;
+		if (round == 4 && playernum > 6 && failnum > 1)
+			return 0;
+		else if (failnum)
+			return 0;
+		else
+			return 1;
+	}
+	int resultJudge()
+	{
+		if (compnum > 2)
+			return FIGHTERS_WIN;
+		else if (failnum > 2)
+			return SPIES_WIN;
+		else
+			return CONTINUE;
+	}
+	void settings() override
+	{
+		cout << "请输入游戏人数（5-10）：" << endl;
+		playernum = corrin<unsigned int>(5, 10);
+		AntiPlayer player;
+		IdentityTable = identityDistribute();
+		for (int i = 0;i < playernum;i++)
+		{
+			cout << "第" << i + 1 << "位玩家请输入姓名：" << endl << "提示：输入rand()有惊喜哦" << endl;
+			player.name = corrin<string>();
+			if (player.name == "rand()")
+				player.name = NameGen(rand() % 2 + 2, rand() % 3);
+			cout << "第" << i + 1 << "位玩家" << player.name;
+			player.identity = IdentityTable[i];
+			player.number = i;
+			cout << "的身份是：" << getIdentityName(player.identity, 1) << endl;
+			_getch();
+			cont.push_back(player);
+			system("cls");
+		}
+		cout << cont << endl;
+	}
+	void proceed() override
+	{
+		MissionExecNumber = getMissionExec(playernum);
+		int captain;
+		int choicea;
+		int pin;
+		int capround = 0;
+		vector<unsigned int> usedcont;
+		usedcont.push_back(1000);
+		while (round < 5)
+		{
+		rechooseCaptain:
+			round++;
+			if (round == 1)
+			{
+				cout << "Spies: Please check your mates." << endl;
+				for (int i = 0;i < cont.size();i++)
+					if (cont[i].identity == SPY)
+						cout << cont[i].number + 1 << " ";
+				cout << endl << "Please choose a captain:" << endl;
+				captain = corrin<unsigned int>(1, playernum) - 1;
+			}
+			while (capround < 5)
+			{
+				if ((round != 1)||capround)
+				{
+					if (captain < playernum - 1)
+						captain++;
+					else
+						captain = 0;
+				}
+				cout << "The new Captain is" << captain + 1 << endl;
+				cout << "Is the project approved by over a half?(1--Yes, 0--No)" << endl;
+				if (corrin<bool>())
+					break;
+				system("cls");
+				if (capround == 4)
+				{
+					cout << "Mission FAILED.";
+					failnum++;
+					goto rechooseCaptain;
+				}
+				capround++;
+			}
+			cout << "Captain: Please choose " << MissionExecNumber[round - 1] << " persons to execute the mission:" << endl;
+			for (int i = 0;i < MissionExecNumber[round - 1];i++)
+			{
+				int cfpin = 1;
+				while (cfpin)
+				{
+					cfpin = 0;
+					choicea = corrin<unsigned int>(1, playernum) - 1;
+					for (int j = 0;j < usedcont.size();j++)
+						if (choicea == usedcont[j])
+							cfpin = 1;
+				}
+				usedcont.push_back(choicea);
+				ChosenforMission.push_back(cont[choicea]);
+			}
+			if (missionExec())
+			{
+				cout << "Mission SUCCEEDED!" << endl;
+				compnum++;
+			}
+			else
+			{
+				cout << "Mission FAILED!" << endl;
+				failnum++;
+			}
+			if (pin = resultJudge())
+			{
+				if (pin == 1)
+					cout << "Fighters(BLUE) Win!" << endl;
+				else
+					cout << "Spies(RED) Win!" << endl;
+				cout << cont << endl;
+				break;
+			}
+			else
+				cout << "Game Continues." << endl;
+			usedcont.clear();
+			usedcont.push_back(1000);
+			ChosenforMission.clear();
+		}
+		cout << cont << endl;
+		_getch();
+	}
+private:
+	vector<AntiPlayer> cont;
+	vector<bool> IdentityTable;
+	vector<int> MissionExecNumber;
+	vector<AntiPlayer> ChosenforMission;
+	unsigned int compnum;
+	unsigned int failnum;
+	unsigned int round;
+};

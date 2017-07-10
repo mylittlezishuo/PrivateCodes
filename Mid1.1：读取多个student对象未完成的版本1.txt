@@ -1,0 +1,276 @@
+#pragma once
+#define _CRT_SECURE_NO_WARNINGS
+#define _TEXT 0
+#define BEGIN 1
+#define NAME 2
+#define STUDENT_NUMBER 3
+#define COURSE 4
+#define _END 5
+#define _BREAK 6
+#include<iostream>
+#include<string>
+#include<fstream>
+#include<cmath>
+#include<cstdlib>
+#include<Windows.h>
+#include<conio.h>
+#include<sstream>
+using namespace std;
+string fill(unsigned int num, int max_size, char tofill)
+{
+	string out = "", pout = "";
+	int maxdigit = (int)floor(log10(num)) + 1;
+	if (maxdigit < max_size)
+	{
+		for (int i = 0;!(i > maxdigit);i++)
+		{
+			char c = (num % 10) + tofill;
+			pout += c;
+			num = (num - num % 10) / 10;
+		}
+		for (int i = maxdigit+1;i < max_size;i++)
+			pout += '0';
+		for (int i = 0;i < max_size;i++)
+			out += pout.substr(max_size - i - 1, 1);
+		return out;
+	}
+	else
+	{
+		for (int i = 0;!(i > maxdigit);i++)
+		{
+			char c = (num % 10) + '0';
+			pout += c;
+			num = (num - num % 10) / 10;
+		}
+		for (int i = 0;i < maxdigit;i++)
+			out += pout.substr(maxdigit - i - 1, 1);
+		return out;
+	}
+}
+string cut(string instr,char tocut)
+{
+	for (int i = 0;i < instr.size();i++)
+	{
+		if (instr[0] == tocut)
+			instr = instr.substr(1);
+		else
+			break;
+	}
+	return instr;
+}
+/*unsigned int stou(string str)
+{
+	unsigned int out = 0;
+	for (int i = 0;i < str.size();i++)
+		out += pow(10, str.size() - i - 1)*((int)str[i] - '0');
+	return out;
+}*/
+struct course
+{
+	string name;
+	unsigned int code;
+	unsigned int mark;
+};
+bool operator !=(course a, course b)
+{
+	if ((a.code == b.code) && (a.name == b.name) && (a.mark == b.mark))
+		return 0;
+	else
+		return 1;
+}
+ostream& operator <<(ostream &output, course c)
+{
+	output << endl << c.name << "/" << c.code << "/" << c.mark << "/";
+	return output;
+}
+course& operator >>(istream &input, course &c)
+{
+	input >> c.name;
+	input.seekg(ios::cur + 1);
+	input >> c.code;
+	input.seekg(ios::cur + 1);
+	input >> c.mark;
+	input.seekg(ios::cur + 1);
+	return c;
+}
+ostream& operator <<(ostream &output, vector<course> v)
+{
+	for (int i = 0; i < v.size(); i++)
+		output << v[i] << '>';
+	output << "?" << endl;
+	return output;
+}
+float getGPA(unsigned int mark)
+{
+	if (mark > 94)
+		return 4.0;
+	else if (mark > 89)
+		return 3.7;
+	else if (mark > 84)
+		return 3.3;
+	else if (mark > 79)
+		return 3.0;
+	else if (mark > 77)
+		return 2.7;
+	else if (mark > 72)
+		return 2.3;
+	else if (mark > 69)
+		return 2.0;
+	else if (mark > 59)
+		return 1.0;
+	else
+		return 0.0;
+}
+course stoc(string s)
+{
+	course c;
+	int round = 0;
+	string in = "";
+	stringstream ss;
+	for (int i = 0;i < s.size();i++)
+	{
+		if (s[i] != '/')
+			in.push_back(s[i]);
+		else
+		{
+			switch (round)
+			{
+			case 0:
+				c.name = in;
+				break;
+			case 1:
+				ss << in;
+				ss >> c.code;
+				ss.clear();
+				break;
+			case 2:
+				ss << in;
+				ss >> c.mark;
+				ss.clear();
+				break;
+			}
+			round++;
+			if (round > 2)break;
+			in.clear();
+		}
+	}
+	return c;
+}
+class student
+{
+public:
+	student() {}
+	student(unsigned int code, string name,vector<course> cont) :code(code), name(name),cont(cont){}
+	student(student &s) :code(s.code), name(s.name), cont(s.cont) {}
+	void set(unsigned int code, string name, vector<course> cont)
+	{
+		this->code = code;
+		this->cont = cont;
+		this->name = name;
+	}
+	friend ostream& operator << (ostream &output, student s)
+	{
+		output << s.name << "|" << s.code << '*' << s.cont << endl;
+		return output;
+	}
+	unsigned int getCode()
+	{
+		return this->code;
+	}
+	string getName()
+	{
+		return this->name;
+	}
+	vector<course> getCont()
+	{
+		return this->cont;
+	}
+private:
+	unsigned int code;
+	string name;
+	vector<course> cont;
+};
+struct st_offs {
+	student stu;
+	unsigned int offset;
+};
+static course endS = { "end",1111111111,100 };
+void write_in(student stu, fstream &s)
+{
+	s << "+" << stu.getName() << "|" << fill(stu.getCode(), 10, '0') << '*' << stu.getCont() << endl;
+}
+st_offs read_in(fstream &s)
+{
+	vector<course> cont;
+	cont.clear();
+	course inc = { "",0,0 };
+	string name;
+	char c;
+	unsigned int pin, code = 0;
+	string input;
+	unsigned int turn = 1;
+	st_offs ret = {};
+	while ((s >> c).good())
+	{
+		turn++;
+		switch (c)
+		{
+		case '+':
+			pin = BEGIN;
+			break;
+		case '|':
+			pin = NAME;
+			break;
+		case '*':
+			pin = STUDENT_NUMBER;
+			break;
+		case '>':
+			pin = COURSE;
+			break;
+		case '?':
+			pin = _END;
+			break;
+		case '\n':
+			pin = _BREAK;
+			break;
+		default:
+			pin = _TEXT;
+			break;
+		}
+		if (!pin)
+			input.push_back(c);
+		else
+		{
+			switch (pin)
+			{
+			case NAME:
+				name = input;
+				break;
+			case STUDENT_NUMBER:
+				code = stoi(input);
+				break;
+			case COURSE:
+				cont.push_back(stoc(input));
+				break;
+			case _BREAK:break;
+			case _END:
+				student st(code, name, cont);
+				ret = { st,turn };
+				return ret;
+			}
+			input = "";
+		}
+	}
+}
+void disableCloseButton()
+{
+	DeleteMenu(GetSystemMenu(GetConsoleWindow(), FALSE), SC_CLOSE, MF_BYCOMMAND);
+	DrawMenuBar(GetConsoleWindow());
+	// 上面两句也可以换成
+	// EnableMenuItem(GetSystemMenu(GetConsoleWindow(), FALSE), SC_CLOSE, MF_GRAYED);
+}
+void deBug()
+{
+	cout << stoc("hahaah/2016011015/98/");
+	_getch();
+}
